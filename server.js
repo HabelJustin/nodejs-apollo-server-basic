@@ -1,4 +1,4 @@
-const { ApolloServer, gql } = require("apollo-server");
+const { ApolloServer, gql, PubSub } = require("apollo-server");
 
 // Define Schema
 const typeDefs = gql`
@@ -47,6 +47,9 @@ const typeDefs = gql`
 		register(userInfo: UserInfo!): RegisterResponse!
 		login(username: String!, password: String!): Boolean!
 	}
+	type Subscription {
+		newUser: User
+	}
 `;
 
 const books = [
@@ -64,8 +67,15 @@ const authors = [
 	{ username: "Terry Pratchett", id: "3" },
 ];
 
+const NEW_USER = "NEW_USER";
+
 // function resolvers
 const resolvers = {
+	Subscription: {
+		newUser: {
+			subscribe: (parent, args, { pubsub }) => pubsub.asyncIterator(NEW_USER),
+		},
+	},
 	UsersResponse: {
 		// custom type resolver
 		books: (parent) => {
@@ -107,8 +117,18 @@ const resolvers = {
 		},
 	},
 	Mutation: {
-		register: (parent, args, context, info) => {
+		register: (parent, args, { pubsub }, info) => {
 			console.log("Mutation arguments:", { args });
+
+			const newUser = {
+				id: "ggwp123",
+				username: "Alex",
+			};
+
+			pubsub.publish(NEW_USER, {
+				newUser,
+			});
+
 			return {
 				errors: [
 					{
@@ -125,10 +145,12 @@ const resolvers = {
 	},
 };
 
+const pubsub = new PubSub();
+
 const server = new ApolloServer({
 	typeDefs,
 	resolvers,
-	context: ({ req, res }) => ({ req, res }),
+	context: ({ req, res }) => ({ req, res, pubsub }),
 });
 
 server.listen().then(({ url }) => console.log(`Server started at ${url}`));
